@@ -8,6 +8,7 @@ use std::env;
 use std::fs;
 use std::path;
 use std::path::Path;
+use std::path::PathBuf;
 use std::str;
 
 use deno_ast::MediaType;
@@ -30,6 +31,29 @@ fn get_media_type(p: &Path) -> MediaType {
     Some("js") | Some("mjs") => MediaType::JavaScript,
     Some("ts") => MediaType::TypeScript,
     _ => MediaType::Tsx,
+  }
+}
+
+fn make_absolute(p: &String, cwd: &Path) -> PathBuf {
+  let path = Path::new(p);
+  if path.is_absolute() {
+    return PathBuf::from(path);
+  }
+  let mut buf = cwd.to_path_buf();
+  buf.push(path);
+  match fs::canonicalize(buf) {
+    Ok(p) => {
+      // workaround for UNC path see https://github.com/rust-lang/rust/issues/42869
+      if p.starts_with(r"\\?\") {
+        match p.to_str() {
+          Some(s) => PathBuf::from(&s[4..]),
+          None => p,
+        }
+      } else {
+        p
+      }
+    }
+    Err(_) => PathBuf::from(p),
   }
 }
 
@@ -87,11 +111,11 @@ fn denolint(__dirname: String, config_path: String) -> Result<bool> {
     .map(|m| m.is_file())
     .unwrap_or(false);
 
-  let (rules, cfg_ignore_files) = if config_existed {
+  let (rules, cfg_ignore_files, cfg_add_files) = if config_existed {
     let cfg = config::load_from_json(path::Path::new(&config_path))?;
-    (cfg.get_rules(), cfg.files.exclude)
+    (cfg.get_rules(), cfg.files.exclude, cfg.files.include)
   } else {
-    (get_recommended_rules(), vec![])
+    (get_recommended_rules(), vec![], vec![])
   };
 
   let mut eslint_ignore_file = cwd.clone();
@@ -136,6 +160,12 @@ fn denolint(__dirname: String, config_path: String) -> Result<bool> {
     },
   };
   let mut dir_walker = WalkBuilder::new(cwd.clone());
+  let dir = if !cfg_add_files.is_empty() {
+    make_absolute(&cfg_add_files[0], &cwd)
+  } else {
+    cwd.clone()
+  };
+  let mut dir_walker = WalkBuilder::new(dir);
   dir_walker
     .add_custom_ignore_filename(ignore_file_path)
     .types(types)
@@ -153,6 +183,11 @@ fn denolint(__dirname: String, config_path: String) -> Result<bool> {
       .build()
       .unwrap_or_else(|_| panic!("Applying files.exclude from {:?} failed", config_path));
     dir_walker.overrides(o);
+  for i in cfg_add_files.iter().skip(1) {
+    dir_walker.add(&make_absolute(i, &cwd));
+  }
+  for i in cfg_ignore_files {
+    dir_walker.add_ignore(i);
   }
   for entry in dir_walker.build().filter_map(|v| v.ok()) {
     let p = entry.path();

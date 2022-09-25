@@ -9,5 +9,10 @@ export function lint(
   allRules?: boolean | undefined | null,
   excludeRules?: Array<string> | undefined | null,
   includeRules?: Array<string> | undefined | null,
+  allRules?: boolean | undefined | null
 ): Array<string>
-export function denolint(dirname: string, configPath: string): boolean
+export function denolint(
+  dirname: string,
+  configPath: string,
+  scanDirs?: Array<string> | undefined | null
+): boolean

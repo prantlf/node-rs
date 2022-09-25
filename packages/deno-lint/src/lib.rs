@@ -101,7 +101,11 @@ fn lint(
 }
 
 #[napi]
-fn denolint(__dirname: String, config_path: String) -> Result<bool> {
+fn denolint(
+  __dirname: String,
+  config_path: String,
+  scan_dirs: Option<Vec<String>>,
+) -> Result<bool> {
   let mut has_error = false;
   let cwd = env::current_dir().map_err(|e| {
     Error::new(
@@ -168,6 +172,13 @@ fn denolint(__dirname: String, config_path: String) -> Result<bool> {
     cwd.clone()
   };
   let mut dir_walker = WalkBuilder::new(dir);
+  let dirs = scan_dirs.unwrap_or_default();
+  let root = if dirs.is_empty() {
+    cwd.as_path()
+  } else {
+    Path::new(&dirs[0])
+  };
+  let mut dir_walker = WalkBuilder::new(root);
   dir_walker
     .add_custom_ignore_filename(ignore_file_path)
     .types(types)
@@ -187,6 +198,9 @@ fn denolint(__dirname: String, config_path: String) -> Result<bool> {
     dir_walker.overrides(o);
   for i in cfg_add_files.iter().skip(1) {
     dir_walker.add(&make_absolute(i, &cwd));
+  }
+  for i in dirs.into_iter().skip(1) {
+    dir_walker.add(i);
   }
   for i in cfg_ignore_files {
     dir_walker.add_ignore(i);

@@ -13,9 +13,8 @@ use std::str;
 
 use deno_ast::MediaType;
 use deno_lint::linter::LinterBuilder;
-use deno_lint::rules::{get_all_rules, get_recommended_rules};
-use ignore::overrides::OverrideBuilder;
 use deno_lint::rules::get_recommended_rules;
+use ignore::overrides::OverrideBuilder;
 use ignore::types::TypesBuilder;
 use ignore::WalkBuilder;
 use napi::bindgen_prelude::*;
@@ -165,45 +164,41 @@ fn denolint(
       Err(_) => __dirname.as_str(),
     },
   };
-  let mut dir_walker = WalkBuilder::new(cwd.clone());
-  let dir = if !cfg_add_files.is_empty() {
+  let dirs = scan_dirs.unwrap_or_default();
+  let root = if !dirs.is_empty() {
+    make_absolute(&dirs[0], &cwd)
+  } else if !cfg_add_files.is_empty() {
     make_absolute(&cfg_add_files[0], &cwd)
   } else {
     cwd.clone()
-  };
-  let mut dir_walker = WalkBuilder::new(dir);
-  let dirs = scan_dirs.unwrap_or_default();
-  let root = if dirs.is_empty() {
-    cwd.as_path()
-  } else {
-    Path::new(&dirs[0])
   };
   let mut dir_walker = WalkBuilder::new(root);
   dir_walker
     .add_custom_ignore_filename(ignore_file_path)
     .types(types)
     .follow_links(true);
-  if !cfg_ignore_files.is_empty() {
-    let mut overrides = OverrideBuilder::new(cwd);
-    for f in cfg_ignore_files {
-      let mut r = "!".to_string();
-      r.push_str(&f);
-      overrides
-        .add(&r)
-        .unwrap_or_else(|_| panic!("Adding excluded file {:?} failed", f));
+  if dirs.is_empty() {
+    if !cfg_ignore_files.is_empty() {
+      let mut overrides = OverrideBuilder::new(cwd.clone());
+      for f in cfg_ignore_files {
+        let mut r = "!".to_string();
+        r.push_str(&f);
+        overrides
+          .add(&r)
+          .unwrap_or_else(|_| panic!("Adding excluded file {:?} failed", f));
+      }
+      let o = overrides
+        .build()
+        .unwrap_or_else(|_| panic!("Applying files.exclude from {:?} failed", config_path));
+      dir_walker.overrides(o);
     }
-    let o = overrides
-      .build()
-      .unwrap_or_else(|_| panic!("Applying files.exclude from {:?} failed", config_path));
-    dir_walker.overrides(o);
-  for i in cfg_add_files.iter().skip(1) {
-    dir_walker.add(&make_absolute(i, &cwd));
-  }
-  for i in dirs.into_iter().skip(1) {
-    dir_walker.add(i);
-  }
-  for i in cfg_ignore_files {
-    dir_walker.add_ignore(i);
+    for i in cfg_add_files.iter().skip(1) {
+      dir_walker.add(&make_absolute(i, &cwd));
+    }
+  } else {
+    for i in dirs.into_iter().skip(1) {
+      dir_walker.add(i);
+    }
   }
   for entry in dir_walker.build().filter_map(|v| v.ok()) {
     let p = entry.path();

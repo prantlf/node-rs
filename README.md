@@ -4,6 +4,8 @@
 
 When `Node.js` meet `Rust` = 🚀
 
+**NOTE**: This fork was created to correct problems and introdce improvements to [Node.js bindings for deno_lint](​https://github.com/napi-rs/node-rs/tree/main/packages/deno-lint). You will find them in several [branches](https://github.com/prantlf/node-rs/branches) and also [combined](https://github.com/prantlf/node-rs/commits/combined). This work has been moved to a dedicated project with [denolint for Node.js](https://github.com/prantlf/denolint).
+
 # napi-rs
 
 Make rust crates binding to Node.js use [napi-rs](https://github.com/napi-rs/napi-rs)
